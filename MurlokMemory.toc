@@ -1,0 +1,14 @@
+## Interface: 120105
+## Title: MurlokMemory
+## Notes: Import Murlok talent profiles into native talent loadouts.
+## Notes-ptBR: Importe perfis de talentos do Murlok para os loadouts do WoW.
+## Author: Eduardo Rui
+## Version: 0.1.1-beta
+## SavedVariables: MurlokMemoryDB
+## OptionalDeps: MurlokExport
+## IconTexture: Interface\Icons\INV_Misc_Fish_21
+
+Locale.lua
+Data.lua
+Core.lua
+UI.lua
