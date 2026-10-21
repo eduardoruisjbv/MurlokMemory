@@ -1,6 +1,6 @@
 local addon, MM = ...
 MM.name = addon
-MM.version = "0.1.1-beta"
+MM.version = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addon, "Version")) or "?"
 MM.selectedMode = "m+"
 MM.profiles = {}
 
@@ -45,22 +45,33 @@ local function newBitReader(text)
     end
 end
 
+local treeNodesCache = {}
+
 local function stringHasSpell(importString, specID, spellID)
     if not (C_ClassTalents and C_Traits and C_ClassTalents.GetTraitTreeForSpec and C_ClassTalents.GetActiveConfigID) then return nil end
     local configID = C_ClassTalents.GetActiveConfigID()
     local treeID = C_ClassTalents.GetTraitTreeForSpec(specID)
-    local nodes = treeID and configID and C_Traits.GetTreeNodes(treeID)
+    if not (treeID and configID) then return nil end
+    local nodes = treeNodesCache[treeID]
+    if not nodes then
+        nodes = C_Traits.GetTreeNodes(treeID)
+        treeNodesCache[treeID] = nodes
+    end
     if not nodes then return nil end
 
     local read = newBitReader(importString)
-    if read(8) == nil or read(16) ~= specID then return nil end
+    local version = read(8)
+    if version == nil then return nil end
+    -- The node layout below is only valid for the current serialization version.
+    if C_Traits.GetLoadoutSerializationVersion and version ~= C_Traits.GetLoadoutSerializationVersion() then return nil end
+    if read(16) ~= specID then return nil end
     for _ = 1, 16 do if read(8) == nil then return nil end end
 
     for _, nodeID in ipairs(nodes) do
         local selected = read(1)
         if selected == nil then return nil end
         if selected == 1 and read(1) == 1 then
-            if read(1) == 1 then read(6) end
+            if read(1) == 1 and read(6) == nil then return nil end
             local choiceIndex = 0
             if read(1) == 1 then choiceIndex = read(2) end
             if choiceIndex == nil then return nil end
@@ -93,25 +104,31 @@ local function weaponStyleFromEquips(equips)
     if type(equips) ~= "table" then return nil end
     local getInfo = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
     if not getInfo then return nil end
-    local function share(slot, accepted)
+    local function tally(slot, accepted)
         local items = type(equips[slot]) == "table" and equips[slot].items
-        if type(items) ~= "table" then return 0 end
+        if type(items) ~= "table" then return 0, 0 end
         local hits, total = 0, 0
         for itemID, info in pairs(items) do
-            local count = type(info) == "table" and info.count or 0
+            local count = type(info) == "table" and tonumber(info.count) or 0
             total = total + count
             local equipLoc = select(4, getInfo(itemID))
             if equipLoc and accepted[equipLoc] then hits = hits + count end
         end
-        return total > 0 and hits / total or 0
+        return hits, total
     end
-    if share("main-hand", {INVTYPE_2HWEAPON = true}) >= 0.5 then return "2h" end
-    if share("off-hand", WEAPON_SLOTS) >= 0.5 then return "2w" end
+    -- Both shares use the main-hand sample as the denominator: players without
+    -- an off-hand item are absent from the off-hand table.
+    local twoHanded, players = tally("main-hand", {INVTYPE_2HWEAPON = true})
+    if players == 0 then return nil end
+    if twoHanded / players >= 0.5 then return "2h" end
+    if tally("off-hand", WEAPON_SLOTS) / players >= 0.5 then return "2w" end
     return nil
 end
 
 function MM:RefreshProfiles()
+    local previous = self.profiles[self.selectedProfile or 0]
     self.profiles = {}
+    self.selectedProfile = nil
     local provider = _G.MurlokExport
     if type(provider) ~= "table" then return false, "provider" end
 
@@ -165,6 +182,14 @@ function MM:RefreshProfiles()
         if a.hero ~= b.hero then return a.hero < b.hero end
         return a.rank < b.rank
     end)
+    if previous then
+        for index, profile in ipairs(self.profiles) do
+            if profile.importString == previous.importString then
+                self.selectedProfile = index
+                break
+            end
+        end
+    end
     return true
 end
 
@@ -193,19 +218,24 @@ function MM:ImportProfile(profile)
         return self:Print(self:T("O diálogo de importação de talentos não está disponível. Abra a aba Talentos e tente novamente."))
     end
 
-    if self.ui then self.ui:Hide() end
-    PlayerSpellsFrame:Show()
-    if PlayerSpellsFrame.SetTab and PlayerSpellsFrame.talentTabID then
-        PlayerSpellsFrame:SetTab(PlayerSpellsFrame.talentTabID)
-    end
-    ClassTalentLoadoutImportDialog:ShowDialog()
     if not ClassTalentLoadoutImportDialog.ImportControl or not ClassTalentLoadoutImportDialog.NameControl then
         return self:Print(self:T("Não foi possível abrir o diálogo nativo de importação."))
     end
 
+    if self.ui then self.ui:Hide() end
+    if PlayerSpellsUtil and PlayerSpellsUtil.OpenToClassTalentsTab then
+        PlayerSpellsUtil.OpenToClassTalentsTab()
+    else
+        ShowUIPanel(PlayerSpellsFrame)
+        if PlayerSpellsFrame.SetTab and PlayerSpellsFrame.talentTabID then
+            PlayerSpellsFrame:SetTab(PlayerSpellsFrame.talentTabID)
+        end
+    end
+    ClassTalentLoadoutImportDialog:ShowDialog()
+
     ClassTalentLoadoutImportDialog.ImportControl:SetText(profile.importString)
     local modeName = self.selectedMode == "m+" and "Mplus" or self.selectedMode
-    local loadoutName = string.format("MM_%s_%d_%s", modeName, profile.rank, date("%Y%m%d"))
+    local loadoutName = string.format("MM_%s_%s_%d_%s", modeName, tostring(profile.hero):sub(1, 10), profile.rank, date("%Y%m%d"))
     ClassTalentLoadoutImportDialog.NameControl:SetText(loadoutName:sub(1, 30))
     self:Print(self:T("O perfil foi enviado ao diálogo nativo. Revise o nome e confirme a importação no WoW."))
 end
@@ -214,13 +244,11 @@ function MM:Initialize()
     MurlokMemoryDB = type(MurlokMemoryDB) == "table" and MurlokMemoryDB or {}
     if not self.modeMap[MurlokMemoryDB.mode] then MurlokMemoryDB.mode = "m+" end
     self.selectedMode = MurlokMemoryDB.mode
+    self.configReady = true
 
     SLASH_MURLOKMEMORY1 = "/murlokmemory"
     SLASH_MURLOKMEMORY2 = "/mmurlok"
     SlashCmdList.MURLOKMEMORY = function() self:ToggleUI() end
-
-    self:RefreshProfiles()
-    if self.RefreshUI then self:RefreshUI() end
 end
 
 MM.modeMap = {}
@@ -237,7 +265,10 @@ frame:SetScript("OnEvent", function(_, event, arg)
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" and arg ~= "player" then
         return
     elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
-        if MM.RefreshProfiles then MM:RefreshProfiles() end
-        if MM.RefreshUI then MM:RefreshUI() end
+        -- ToggleUI refreshes on open, so only a visible window needs updating.
+        if MM.ui and MM.ui:IsShown() then
+            MM:RefreshProfiles()
+            MM:RefreshUI()
+        end
     end
 end)

@@ -111,11 +111,10 @@ function MM:RefreshUI()
     local f = self.ui
     if not self.configReady then return end
 
-    local _, classToken = UnitClass("player")
+    local className, classToken = UnitClass("player")
     local specIndex = GetSpecialization and GetSpecialization()
     local specID, specName, _, specIcon
     if specIndex then specID, specName, _, specIcon = GetSpecializationInfo(specIndex) end
-    local _, className = UnitClass("player")
     f.specIcon:SetTexture(specIcon or "Interface\\Icons\\INV_Misc_QuestionMark")
     f.character:SetText((className or classToken or "?") .. " · " .. (specName or "…"))
     f.modeLabel:SetText(self:T("Modo") .. ": " .. (self.modeMap[self.selectedMode].label or self.selectedMode))
@@ -214,13 +213,3 @@ function MM:ToggleUI()
         self.ui:Show()
     end
 end
-
-local login = CreateFrame("Frame")
-login:RegisterEvent("ADDON_LOADED")
-login:SetScript("OnEvent", function(_, event, name)
-    if event == "ADDON_LOADED" and name == "MurlokMemory" then
-        login:UnregisterEvent("ADDON_LOADED")
-        MM.configReady = true
-        if MM.ui then MM:RefreshUI() end
-    end
-end)

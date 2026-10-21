@@ -1,3 +1,13 @@
+# MurlokMemory 0.1.2-beta
+
+- Keep the selected profile when the list is rebuilt (spec change, loading screen), or clear it if that build is gone.
+- Compute the 2h/2w badge against the whole main-hand sample, so two-handed users are counted.
+- Open the talents panel through Blizzard's panel manager and check the import dialog before opening anything.
+- Include the hero tree in loadout names so different builds no longer share a name.
+- Ignore talent strings from another serialization version and stop parsing truncated strings.
+- Refresh only while the window is open; the version shown comes from the .toc.
+- Add the MIT license.
+
 # MurlokMemory 0.1.1-beta
 
 - Show a "2h" or "2w" badge on each profile row (two-handed or dual wield) and in its tooltip.

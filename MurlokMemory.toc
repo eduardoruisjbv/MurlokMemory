@@ -3,7 +3,7 @@
 ## Notes: Import Murlok talent profiles into native talent loadouts.
 ## Notes-ptBR: Importe perfis de talentos do Murlok para os loadouts do WoW.
 ## Author: Eduardo Rui
-## Version: 0.1.1-beta
+## Version: 0.1.2-beta
 ## SavedVariables: MurlokMemoryDB
 ## OptionalDeps: MurlokExport
 ## IconTexture: Interface\Icons\INV_Misc_Fish_21

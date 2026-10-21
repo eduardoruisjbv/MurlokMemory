@@ -1,4 +1,4 @@
-# MurlokMemory 0.1.1-beta
+# MurlokMemory 0.1.2-beta
 
 MurlokMemory is a small, MuscleMemory-style Retail addon for choosing a Murlok talent build by activity and importing it into WoW's native talent-loadout dialog.
 
