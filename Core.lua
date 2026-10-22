@@ -125,6 +125,13 @@ local function weaponStyleFromEquips(equips)
     return nil
 end
 
+-- Provider values are shown with string concatenation, so keep only scalars.
+local function displayValue(value)
+    local kind = type(value)
+    if kind == "number" or kind == "string" then return value end
+    return nil
+end
+
 function MM:RefreshProfiles()
     local previous = self.profiles[self.selectedProfile or 0]
     self.profiles = {}
@@ -142,7 +149,7 @@ function MM:RefreshProfiles()
     if type(specData) ~= "table" then return true end
 
     for heroName, heroData in pairs(specData) do
-        if type(heroData) == "table" and type(heroData.talents) == "table" then
+        if type(heroName) == "string" and type(heroData) == "table" and type(heroData.talents) == "table" then
             local heroNameDisplay = heroName:gsub("^%l", string.upper)
             local heroStyle = weaponStyleFromEquips(heroData.equips)
             local heroAtlas
@@ -167,8 +174,8 @@ function MM:RefreshProfiles()
                         heroDisplay = heroNameDisplay,
                         heroAtlas = heroAtlas,
                         heroID = heroData.id,
-                        rating = heroData.rating,
-                        population = heroData.count,
+                        rating = displayValue(heroData.rating),
+                        population = displayValue(heroData.count),
                         rank = rank,
                         importString = importString,
                         weaponStyle = self:WeaponStyleFromString(importString, specID) or heroStyle,
